@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}Add Book · MyReads{% endblock %}
+{% block content %}
+  <h4 class="mb-3">Add a new book</h4>
+  <form method="post">
+    {{ form.hidden_tag() }}
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">Title</label>
+        {{ form.title(class_='form-control', id='title', placeholder='e.g., The Pragmatic Programmer') }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Author</label>
+        {{ form.author(class_='form-control', id='author', placeholder='e.g., Andrew Hunt; David Thomas') }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Year</label>
+        {{ form.year(class_='form-control', id='year', placeholder='1999') }}
+      </div>
+      <div class="col-md-5">
+        <label class="form-label">ISBN</label>
+        <div class="input-group">
+          {{ form.isbn(class_='form-control', id='isbn', placeholder='9780201616224 (10 or 13 digits)') }}
+          <button class="btn btn-outline-secondary" type="button" id="isbnFetchBtn">Fetch</button>
+        </div>
+        <div id="isbnHelp" class="form-text">Click Fetch to auto-fill from Open Library.</div>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Cover Image URL</label>
+        {{ form.cover_url(class_='form-control', id='cover_url', placeholder='https://...') }}
+      </div>
+      <div class="col-12">
+        <label class="form-label">Description</label>
+        {{ form.description(class_='form-control', id='description', rows=5, placeholder='Short synopsis...') }}
+      </div>
+    </div>
+    <button class="btn btn-primary mt-3" type="submit">{{ form.submit.label.text }}</button>
+  </form>
+
+  <script>
+    const btn = document.getElementById('isbnFetchBtn');
+    btn?.addEventListener('click', async () => {
+      const raw = document.getElementById('isbn').value || '';
+      const isbn = raw.replace(/[-\s]/g, '');
+      if (!isbn) { alert('Enter an ISBN first.'); return; }
+      btn.disabled = true; btn.textContent = 'Fetching...';
+      try {
+        const resp = await fetch(`/api/isbn_lookup?isbn=${encodeURIComponent(isbn)}`);
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error || 'Not found');
+        const b = data.data;
+        if (b.title) document.getElementById('title').value = b.title;
+        if (b.author) document.getElementById('author').value = b.author;
+        if (b.year) document.getElementById('year').value = b.year;
+        if (b.cover_url) document.getElementById('cover_url').value = b.cover_url;
+        if (b.description) document.getElementById('description').value = b.description;
+      } catch (e) {
+        alert('Lookup failed: ' + e.message);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Fetch';
+      }
+    });
+  </script>
+{% endblock %}

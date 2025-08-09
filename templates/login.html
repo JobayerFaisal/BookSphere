@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Login · MyReads{% endblock %}
+{% block content %}
+  <h4 class="mb-3">Sign in</h4>
+  <form method="post">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      <label class="form-label">Email</label>
+      {{ form.email(class_='form-control', placeholder='you@example.com') }}
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Password</label>
+      {{ form.password(class_='form-control', type='password') }}
+    </div>
+    <button class="btn btn-primary" type="submit">{{ form.submit.label.text }}</button>
+  </form>
+{% endblock %}
