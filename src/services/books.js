@@ -1,7 +1,7 @@
 import { db } from '../firebase';
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
-  getDocs, getDoc, query, where, orderBy, serverTimestamp
+  getDocs, getDoc, query, orderBy, serverTimestamp
 } from 'firebase/firestore';
 
 const booksCol = (uid) => collection(db, 'users', uid, 'books');

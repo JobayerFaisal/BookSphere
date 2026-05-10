@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { getBooks } from '../services/books';
 import BookCard from '../components/BookCard';
-import { LayoutGrid } from 'lucide-react';
+
 
 export default function Shelves({ user, onOpenBook }) {
   const [books, setBooks] = useState([]);

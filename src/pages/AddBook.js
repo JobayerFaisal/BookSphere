@@ -99,7 +99,7 @@ export default function AddBook({ onClose, editBook, user, allBooks = [] }) {
     }
   }, [editBook]);
 
-  useEffect(() => { return () => stopScanner(); }, []);
+  useEffect(() => { return () => stopScanner(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 

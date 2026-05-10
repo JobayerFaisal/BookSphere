@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { getBooks, updateBook } from '../services/books';
+import { getBooks } from '../services/books';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import BookCard from '../components/BookCard';
 import { Search, Plus, Target, Edit2, Check, X } from 'lucide-react';
 
 const FILTERS = ['All', 'Reading', 'Finished', 'To Read', 'Paused', 'Wishlist'];
+
+const CURRENT_YEAR = new Date().getFullYear();
 
 export default function Library({ user, onOpenBook, onAddBook, onEditBook }) {
   const [books, setBooks] = useState([]);
@@ -19,7 +21,7 @@ export default function Library({ user, onOpenBook, onAddBook, onEditBook }) {
   const [goal, setGoal] = useState(null); // { target, year }
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState('');
-  const currentYear = new Date().getFullYear();
+  const currentYear = CURRENT_YEAR;
 
   const load = async () => {
     setLoading(true);
@@ -47,7 +49,7 @@ export default function Library({ user, onOpenBook, onAddBook, onEditBook }) {
     } catch {}
   };
 
-  useEffect(() => { load(); loadGoal(); }, [user.uid]);
+  useEffect(() => { load(); loadGoal(); }, [user.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     let list = [...books];
@@ -62,6 +64,7 @@ export default function Library({ user, onOpenBook, onAddBook, onEditBook }) {
     else if (sortBy === 'rating') list.sort((a, b) => (b.rating||0) - (a.rating||0));
     else if (sortBy === 'author') list.sort((a, b) => (a.author||'').localeCompare(b.author||''));
     return list;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [books, filter, langFilter, search, sortBy]);
 
   const stats = useMemo(() => ({
@@ -75,7 +78,7 @@ export default function Library({ user, onOpenBook, onAddBook, onEditBook }) {
       const d = b.updatedAt.toDate ? b.updatedAt.toDate() : new Date(b.updatedAt);
       return d.getFullYear() === currentYear;
     }).length,
-  }), [books]);
+  }), [books, currentYear]);
 
   const goalPct = goal ? Math.min(100, Math.round((stats.finishedThisYear / goal.target) * 100)) : 0;
 

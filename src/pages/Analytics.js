@@ -70,7 +70,6 @@ export default function Analytics({ user }) {
     return { total, finished, reading, avgRating, genreArr, langs, statuses, ratings, shelfArr, topRated, pagesRead, rated: rated.length };
   }, [books]);
 
-  const COLORS = { genre:'var(--sepia)', lang:'var(--blue)', rating:'var(--gold)', shelf:'var(--green)' };
   const GENRE_COLORS = ['#8b6f47','#c0392b','#2980b9','#27ae60','#8e44ad','#e67e22','#16a085'];
 
   return (

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getBooks } from '../services/books';
-import { Sparkles, RefreshCw, BookOpen, ExternalLink } from 'lucide-react';
+import { RefreshCw, BookOpen, ExternalLink } from 'lucide-react';
 
 const COVER_PALETTES = [
   { bg:'#f0e6d8', color:'#6b4226' }, { bg:'#e8f0f8', color:'#1a4a6b' },
@@ -21,7 +21,7 @@ export default function Recommendations({ user }) {
 
   useEffect(() => { getBooks(user.uid).then(b => { setBooks(b); }); }, [user.uid]);
 
-  useEffect(() => { if (books.length > 0) buildProfile(); }, [books]);
+  useEffect(() => { if (books.length > 0) buildProfile(); }, [books]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const buildProfile = () => {
     const owned = books.filter(b => !b.wishlist);

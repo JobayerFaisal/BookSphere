@@ -89,7 +89,7 @@ export default function PrintView({ books, user, onClose }) {
           {/* Books */}
           {nonWishlist.length > 0 && (
             <div style={{ marginBottom:32 }}>
-              <div style={{ fontSize:16, fontWeight:700, color:'#8b6f47', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.08em', fontSize:12 }}>My Books ({nonWishlist.length})</div>
+              <div style={{ fontSize:12, fontWeight:700, color:'#8b6f47', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.08em' }}>My Books ({nonWishlist.length})</div>
               {nonWishlist.map((b,i) => <BookRow key={b.id} book={b} index={i}/>)}
             </div>
           )}

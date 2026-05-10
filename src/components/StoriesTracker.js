@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   getStories, addStory, updateStory, deleteStory, reorderStories, STORY_STATUSES
 } from '../services/stories';
-import { Plus, Trash2, ChevronUp, ChevronDown, Edit2, Check, X, Star } from 'lucide-react';
+import { Plus, Trash2, ChevronUp, ChevronDown, Edit2, Check, X } from 'lucide-react';
 
 const STATUS_CONFIG = {
   'To Read':  { icon:'○', color:'var(--ink-faint)',  bg:'var(--paper-warm)',  border:'var(--border)' },
@@ -142,7 +142,7 @@ export default function StoriesTracker({ user, bookId }) {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [bookId]);
+  useEffect(() => { load(); }, [bookId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stats
   const total = stories.length;

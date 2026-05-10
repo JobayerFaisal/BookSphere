@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { getBook, updateBook, deleteBook } from '../services/books';
 import { getSessions, addSession, deleteSession } from '../services/sessions';
-import { ArrowLeft, Edit2, Trash2, Plus, Trash, Share2, Check, Copy, BookMarked } from 'lucide-react';
+import { ArrowLeft, Edit2, Trash2, Plus, Trash, BookMarked } from 'lucide-react';
 import StoriesTracker from '../components/StoriesTracker';
-import { createShare, deleteShare, getShareId } from '../services/share';
+import { db } from '../firebase';
+import { doc, setDoc, deleteDoc, getDoc, serverTimestamp } from 'firebase/firestore'; // eslint-disable-line no-unused-vars
 
 const STATUS_COLORS = {
   'Reading': { bg:'#eaf4fb', color:'#2980b9' },
@@ -40,9 +41,8 @@ export default function BookDetail({ user, bookId, onBack, onEdit }) {
   const [sessionNotes, setSessionNotes] = useState('');
   const [addingSession, setAddingSession] = useState(false);
   const [sessionFormOpen, setSessionFormOpen] = useState(false);
-  const [shareId, setShareId] = useState(null);
-  const [sharing, setSharing] = useState(false);
-  const [shareCopied, setShareCopied] = useState(false);
+  const [shareId, setShareId] = useState(null); // eslint-disable-line no-unused-vars
+
   const [seriesMode, setSeriesMode] = useState(false);
 
   const load = async () => {
@@ -52,11 +52,14 @@ export default function BookDetail({ user, bookId, onBack, onEdit }) {
     setPageInput(b?.currentPage || '');
     const s = await getSessions(user.uid, bookId);
     setSessions(s);
-    const sid = await getShareId(user.uid, bookId);
-    setShareId(sid);
+    try {
+      const sid = `${user.uid}_${bookId}`;
+      const snap = await getDoc(doc(db, 'shares', sid));
+      setShareId(snap.exists() ? sid : null);
+    } catch {}
     setLoading(false);
   };
-  useEffect(() => { load(); }, [bookId]);
+  useEffect(() => { load(); }, [bookId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updatePage = async () => {
     const pg = parseInt(pageInput);
@@ -83,28 +86,6 @@ export default function BookDetail({ user, bookId, onBack, onEdit }) {
   const handleDeleteSession = async (sessionId) => {
     await deleteSession(user.uid, bookId, sessionId);
     setSessions(prev => prev.filter(s => s.id !== sessionId));
-  };
-
-  const handleShare = async () => {
-    setSharing(true);
-    try {
-      const sid = await createShare(user.uid, book);
-      setShareId(sid);
-    } catch {}
-    setSharing(false);
-  };
-
-  const handleUnshare = async () => {
-    await deleteShare(user.uid, bookId);
-    setShareId(null);
-  };
-
-  const copyShareLink = () => {
-    const url = `${window.location.origin}/share/${shareId}`;
-    navigator.clipboard.writeText(url).then(() => {
-      setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 2000);
-    });
   };
 
   const handleDelete = async () => {

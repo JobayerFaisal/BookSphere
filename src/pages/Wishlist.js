@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { getBooks } from '../services/books';
 import BookCard from '../components/BookCard';
-import { Heart, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
 export default function Wishlist({ user, onOpenBook, onAddBook }) {
   const [books, setBooks] = useState([]);
