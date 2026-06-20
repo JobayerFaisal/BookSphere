@@ -75,3 +75,10 @@ Icon?
 *.bak
 *.swp
 *.swo
+
+# netlify
+.netlify/
+.temp/
+.cache/
+dist/
+.toml

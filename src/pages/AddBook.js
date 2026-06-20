@@ -53,6 +53,27 @@ function mapBookData(book, isbn = '') {
   };
 }
 
+// Maps a Google Books API volume item to our form shape
+function mapGoogleBook(item, isbn = '') {
+  const v = item.volumeInfo || {};
+  const subjects = v.categories || [];
+  return {
+    title: v.title ? (v.subtitle ? `${v.title}: ${v.subtitle}` : v.title) : '',
+    author: v.authors ? v.authors.join(', ') : '',
+    publisher: v.publisher || '',
+    year: v.publishedDate ? (v.publishedDate.match(/\d{4}/)?.[0] || '') : '',
+    totalPages: v.pageCount ? String(v.pageCount) : '',
+    coverUrl: v.imageLinks ? (v.imageLinks.large || v.imageLinks.thumbnail || v.imageLinks.smallThumbnail || '').replace('http://','https://') : '',
+    genres: guessGenres(subjects),
+    isbn,
+  };
+}
+
+// Detects Bengali script in a string to auto-set language
+function looksLikeBengali(text = '') {
+  return /[\u0980-\u09FF]/.test(text);
+}
+
 export default function AddBook({ onClose, editBook, user, allBooks = [] }) {
   const isEdit = !!editBook;
   const [form, setForm] = useState(EMPTY);
@@ -107,23 +128,69 @@ export default function AddBook({ onClose, editBook, user, allBooks = [] }) {
   const searchByTitle = async () => {
     if (!titleQuery.trim()) return;
     setTitleSearching(true); setTitleError(''); setTitleResults([]);
+    const q = titleQuery.trim();
+    let openLibResults = [];
+    let googleResults = [];
+
+    // 1. Open Library search
     try {
-      const q = encodeURIComponent(titleQuery.trim());
-      const res = await fetch(`https://openlibrary.org/search.json?q=${q}&limit=8&fields=key,title,author_name,isbn,cover_i,publisher,first_publish_year,number_of_pages_median,subject`);
+      const res = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=8&fields=key,title,author_name,isbn,cover_i,publisher,first_publish_year,number_of_pages_median,subject`);
       const data = await res.json();
-      if (!data.docs || data.docs.length === 0) { setTitleError('No books found. Try a different search.'); }
-      else setTitleResults(data.docs);
-    } catch { setTitleError('Network error. Check your connection.'); }
+      if (data.docs) openLibResults = data.docs.map(d => ({ ...d, _source: 'openlibrary' }));
+    } catch {}
+
+    // 2. Google Books search — much better coverage for Bengali/regional books
+    try {
+      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=8`);
+      const data = await res.json();
+      if (data.items) {
+        googleResults = data.items.map(item => {
+          const v = item.volumeInfo || {};
+          const isbnObj = (v.industryIdentifiers || []).find(i => i.type === 'ISBN_13') || (v.industryIdentifiers || []).find(i => i.type === 'ISBN_10');
+          return {
+            key: item.id,
+            title: v.title ? (v.subtitle ? `${v.title}: ${v.subtitle}` : v.title) : '',
+            author_name: v.authors || [],
+            first_publish_year: v.publishedDate ? parseInt(v.publishedDate.match(/\d{4}/)?.[0]) : null,
+            publisher: v.publisher ? [v.publisher] : [],
+            isbn: isbnObj ? [isbnObj.identifier] : [],
+            _googleCover: v.imageLinks ? (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail || '').replace('http://','https://') : '',
+            _googleVolume: item,
+            _source: 'google',
+          };
+        }).filter(r => r.title);
+      }
+    } catch {}
+
+    // Merge — dedupe by normalized title, prefer keeping both sources if titles differ
+    const merged = [...openLibResults];
+    const existingTitles = new Set(openLibResults.map(r => (r.title||'').toLowerCase().trim()));
+    googleResults.forEach(r => {
+      if (!existingTitles.has((r.title||'').toLowerCase().trim())) {
+        merged.push(r);
+        existingTitles.add((r.title||'').toLowerCase().trim());
+      }
+    });
+
+    if (merged.length === 0) {
+      setTitleError('No books found on Open Library or Google Books. Try a different search or fill in manually.');
+    } else {
+      setTitleResults(merged.slice(0, 12));
+    }
     setTitleSearching(false);
   };
 
   const selectSearchResult = (doc) => {
     const isbn = doc.isbn ? doc.isbn[0] : '';
-    const coverUrl = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : '';
-    const subjects = doc.subject || [];
+    const coverUrl = doc._source === 'google'
+      ? (doc._googleCover || '')
+      : (doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : '');
+    const subjects = doc.subject || (doc._googleVolume?.volumeInfo?.categories) || [];
+    const title = doc.title || '';
+    const detectedBangla = looksLikeBengali(title) || looksLikeBengali((doc.author_name||[]).join(' '));
     setForm(f => ({
       ...f,
-      title: doc.title || f.title,
+      title: title || f.title,
       author: doc.author_name ? doc.author_name.join(', ') : f.author,
       publisher: doc.publisher ? doc.publisher[0] : f.publisher,
       year: doc.first_publish_year ? String(doc.first_publish_year) : f.year,
@@ -131,6 +198,7 @@ export default function AddBook({ onClose, editBook, user, allBooks = [] }) {
       coverUrl: coverUrl || f.coverUrl,
       isbn: isbn || f.isbn,
       genres: guessGenres(subjects).length ? guessGenres(subjects) : f.genres,
+      language: detectedBangla ? 'বাংলা' : f.language,
     }));
     setIsbnInput(isbn);
     setTitleResults([]);
@@ -144,17 +212,41 @@ export default function AddBook({ onClose, editBook, user, allBooks = [] }) {
     const isbn = rawIsbn.replace(/[\s-]/g, '');
     if (isbn.length !== 10 && isbn.length !== 13) { setLookupState('error'); setLookupMsg('ISBN must be 10 or 13 digits.'); return; }
     setLookupState('loading'); setLookupMsg('');
+
+    // 1. Try Open Library first
     try {
       const res = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`);
       const data = await res.json();
       const key = `ISBN:${isbn}`;
-      if (!data[key]) { setLookupState('notfound'); setLookupMsg('Book not found. Try a different ISBN or fill in manually.'); return; }
-      const mapped = mapBookData(data[key], isbn);
-      setForm(f => ({ ...f, ...Object.fromEntries(Object.entries(mapped).filter(([,v]) => v)) }));
-      setIsbnInput(isbn);
-      setLookupState('success');
-      setLookupMsg(`Found: "${mapped.title}" — review and save below.`);
-    } catch { setLookupState('error'); setLookupMsg('Network error. Check your connection.'); }
+      if (data[key]) {
+        const mapped = mapBookData(data[key], isbn);
+        const detectedBangla = looksLikeBengali(mapped.title) || looksLikeBengali(mapped.author);
+        setForm(f => ({ ...f, ...Object.fromEntries(Object.entries(mapped).filter(([,v]) => v)), ...(detectedBangla ? { language: 'বাংলা' } : {}) }));
+        setIsbnInput(isbn);
+        setLookupState('success');
+        setLookupMsg(`Found on Open Library: "${mapped.title}" — review and save below.`);
+        return;
+      }
+    } catch {}
+
+    // 2. Fall back to Google Books — better coverage for Bengali/regional publishers
+    try {
+      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`);
+      const data = await res.json();
+      if (data.items && data.items.length > 0) {
+        const mapped = mapGoogleBook(data.items[0], isbn);
+        const detectedBangla = looksLikeBengali(mapped.title) || looksLikeBengali(mapped.author);
+        setForm(f => ({ ...f, ...Object.fromEntries(Object.entries(mapped).filter(([,v]) => v)), ...(detectedBangla ? { language: 'বাংলা' } : {}) }));
+        setIsbnInput(isbn);
+        setLookupState('success');
+        setLookupMsg(`Found on Google Books: "${mapped.title}" — review and save below.`);
+        return;
+      }
+    } catch {}
+
+    // 3. Nothing found anywhere
+    setLookupState('notfound');
+    setLookupMsg('Book not found on Open Library or Google Books. This is common for some Bengali publishers — try "Search by title" instead, or fill in manually below.');
   };
 
   const clearLookup = () => {
@@ -387,7 +479,10 @@ export default function AddBook({ onClose, editBook, user, allBooks = [] }) {
                     <div style={{ marginTop:12, display:'flex', flexDirection:'column', gap:6 }}>
                       <div style={{ fontSize:11, fontWeight:600, color:'var(--ink-muted)', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:4 }}>Select a book</div>
                       {titleResults.map((doc, i) => {
-                        const coverId = doc.cover_i;
+                        const coverSrc = doc._source === 'google'
+                          ? doc._googleCover
+                          : (doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-S.jpg` : '');
+                        const isBanglaTitle = looksLikeBengali(doc.title || '');
                         return (
                           <div key={i} onClick={() => selectSearchResult(doc)} style={{
                             display:'flex', gap:12, alignItems:'center', padding:'10px 12px',
@@ -397,14 +492,19 @@ export default function AddBook({ onClose, editBook, user, allBooks = [] }) {
                           onMouseEnter={e => { e.currentTarget.style.borderColor='var(--sepia-light)'; e.currentTarget.style.background='var(--sepia-pale)'; }}
                           onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--paper-card)'; }}
                           >
-                            {coverId
-                              ? <img src={`https://covers.openlibrary.org/b/id/${coverId}-S.jpg`} alt="" style={{ width:36, height:50, objectFit:'cover', borderRadius:3, flexShrink:0, border:'1px solid var(--border)' }} />
+                            {coverSrc
+                              ? <img src={coverSrc} alt="" style={{ width:36, height:50, objectFit:'cover', borderRadius:3, flexShrink:0, border:'1px solid var(--border)' }} onError={e => { e.target.style.display='none'; }} />
                               : <div style={{ width:36, height:50, background:'var(--sepia-pale)', borderRadius:3, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>📖</div>
                             }
                             <div style={{ flex:1, minWidth:0 }}>
-                              <div style={{ fontSize:14, fontWeight:500, color:'var(--ink)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{doc.title}</div>
+                              <div style={{ fontSize:14, fontWeight:500, color:'var(--ink)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontFamily: isBanglaTitle ? 'var(--font-bangla), var(--font-body)' : 'var(--font-body)' }}>{doc.title}</div>
                               <div style={{ fontSize:12, color:'var(--ink-muted)' }}>{doc.author_name ? doc.author_name.slice(0,2).join(', ') : '—'}</div>
-                              <div style={{ fontSize:11, color:'var(--ink-faint)' }}>{doc.first_publish_year || ''}{doc.publisher ? ` · ${doc.publisher[0]}` : ''}</div>
+                              <div style={{ fontSize:11, color:'var(--ink-faint)', display:'flex', alignItems:'center', gap:6 }}>
+                                <span>{doc.first_publish_year || ''}{doc.publisher ? ` · ${doc.publisher[0]}` : ''}</span>
+                                <span style={{ fontSize:9, padding:'1px 6px', borderRadius:8, background: doc._source==='google' ? 'var(--blue-pale)' : 'var(--sepia-pale)', color: doc._source==='google' ? 'var(--blue)' : 'var(--sepia)', fontWeight:600 }}>
+                                  {doc._source === 'google' ? 'Google Books' : 'Open Library'}
+                                </span>
+                              </div>
                             </div>
                             <div style={{ fontSize:11, color:'var(--sepia)', fontWeight:500, flexShrink:0 }}>Select →</div>
                           </div>
@@ -462,7 +562,7 @@ export default function AddBook({ onClose, editBook, user, allBooks = [] }) {
               {form.coverUrl && lookupState === 'success' && (
                 <div style={{ marginTop:12, display:'flex', alignItems:'center', gap:12 }}>
                   <img src={form.coverUrl} alt="Book cover" style={{ width:48, height:66, objectFit:'cover', borderRadius:4, border:'1px solid var(--border)' }} />
-                  <div style={{ fontSize:12, color:'var(--ink-muted)' }}>Cover fetched automatically from Open Library</div>
+                  <div style={{ fontSize:12, color:'var(--ink-muted)' }}>Cover fetched automatically</div>
                 </div>
               )}
             </div>
