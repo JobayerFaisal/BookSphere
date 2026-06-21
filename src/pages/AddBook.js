@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { addBook, updateBook, STATUSES, LANGUAGES, GENRES } from '../services/books';
 import { X, Search, CheckCircle, AlertCircle, Camera, CameraOff, BookOpen } from 'lucide-react';
 import { BrowserMultiFormatReader } from '@zxing/library';
+import AuthorAutocomplete from '../components/AuthorAutocomplete';
 
 const FIELDS = [
   { label:'Title *', key:'title', type:'text', full:true },
@@ -80,6 +81,15 @@ export default function AddBook({ onClose, editBook, user, allBooks = [] }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [duplicate, setDuplicate] = useState(null);
+
+  // Unique author names already in the user's library, for autocomplete suggestions
+  const existingAuthors = useMemo(() => {
+    const set = new Set();
+    allBooks.forEach(b => {
+      if (b.author) b.author.split(',').forEach(a => { const t = a.trim(); if (t) set.add(t); });
+    });
+    return Array.from(set).sort();
+  }, [allBooks]);
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState([]);
   const [genres, setGenres] = useState([]);
@@ -602,7 +612,15 @@ export default function AddBook({ onClose, editBook, user, allBooks = [] }) {
               {FIELDS.map(({ label, key, type, opts, full }) => (
                 <div key={key} style={{ gridColumn: full ? '1/-1' : 'auto' }}>
                   <label style={{ fontSize:12, fontWeight:500, color:'var(--ink-soft)', display:'block', marginBottom:5 }}>{label}</label>
-                  {opts ? (
+                  {key === 'author' ? (
+                    <AuthorAutocomplete
+                      value={form.author}
+                      onChange={v => set('author', v)}
+                      existingAuthors={existingAuthors}
+                      isBangla={form.language === 'বাংলা'}
+                      inputStyle={inputStyle}
+                    />
+                  ) : opts ? (
                     <select value={form[key]} onChange={e => set(key, e.target.value)} style={{ ...inputStyle, fontFamily:'var(--font-body)' }}>
                       {opts.map(o => <option key={o} value={o}>{o}</option>)}
                     </select>
