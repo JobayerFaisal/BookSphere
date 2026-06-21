@@ -3,6 +3,7 @@ import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
 import { LayoutGrid, Heart, BarChart2, LogOut, Menu, X, Plus, Library, Moon, Sun, Download, Printer, Sparkles } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import OfflineBanner from './OfflineBanner';
 
 const NAV = [
   { id:'library', label:'My Library', icon: Library },
@@ -154,6 +155,7 @@ export default function Layout({ user, page, navigate, onAddBook, onExport, onPr
 
       <main style={{ flex:1, minWidth:0 }}>
         <style>{`@media (max-width: 767px) { main { padding-top: 56px !important; } }`}</style>
+        <OfflineBanner />
         {children}
       </main>
     </div>
